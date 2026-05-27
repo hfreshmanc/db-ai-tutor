@@ -6,7 +6,7 @@ load_dotenv()
 import asyncio
 import json
 import httpx
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -18,6 +18,13 @@ from jina_pinecone_index import (
     search_pinecone,
     clear_pinecone_index,
     get_chunk_strategy,
+)
+from document_parser import extract_document_text, supported_upload_extensions
+from prompts import (
+    get_base_system_prompt,
+    get_rag_system_prompt,
+    RAG_USER_NO_HITS,
+    RAG_USER_WITH_CONTEXT,
 )
 
 app = FastAPI()
@@ -43,6 +50,7 @@ async def health():
         if uses_multimodal_endpoint(QWEN_MODEL)
         else "text",
         "pinecone_index": PINECONE_INDEX or None,
+        "upload_formats": list(supported_upload_extensions()),
     }
 
 
@@ -69,14 +77,11 @@ try:
 except ValueError:
     RAG_TOP_K = 3
 
-RAG_SYSTEM_APPENDIX = """
-【知识库 RAG 模式】
-回答用户问题时必须遵守：
-1. 优先且主要依据用户消息中的【参考资料】作答；与通用知识冲突时，以参考资料为准。
-2. 关键结论须能在参考资料中找到依据，可简要注明来源文件名。
-3. 参考资料未提及的内容，不得当作课程/讲义事实；须说明「资料中未提及」后再做一般性补充，并标明为通用知识。
-4. 禁止编造参考资料中不存在的定义、定理、例题、页码或原文表述。
-""".strip()
+
+def resolve_system_instruction(client_instruction: Optional[str] = None) -> str:
+    """统一使用服务端 Prompt；忽略前端传入的简短占位文案。"""
+    _ = client_instruction
+    return get_base_system_prompt()
 
 
 def format_rag_context(hits: List[Dict[str, Any]]) -> str:
@@ -100,23 +105,17 @@ def build_rag_prompt(
     hits: List[Dict[str, Any]],
     base_system: str,
 ) -> tuple[str, str]:
-    """RAG 开启时：强化 system 约束 + 将检索结果与用户问题拼入本轮 user。"""
-    system = f"{base_system.strip()}\n\n{RAG_SYSTEM_APPENDIX}"
+    """RAG 开启：system 追加 RAG 规则；user 注入参考资料与用户问题。"""
+    _ = base_system
+    system = get_rag_system_prompt()
     if hits:
         context_str = format_rag_context(hits)
-        user = (
-            f"【参考资料】（回答时必须优先使用以下内容）\n"
-            f"{context_str}\n\n"
-            f"【用户问题】\n{user_message.strip()}\n\n"
-            f"请根据【参考资料】回答【用户问题】。"
+        user = RAG_USER_WITH_CONTEXT.format(
+            context=context_str,
+            question=user_message.strip(),
         )
     else:
-        user = (
-            f"【用户问题】\n{user_message.strip()}\n\n"
-            f"【检索结果】知识库中未检索到与问题明显相关的片段。\n"
-            f"请先明确告知用户「上传资料中未找到相关内容」，"
-            f"不要编造课程讲义内容；若需补充，仅可使用通用数据库知识并标明「以下为通用知识」。"
-        )
+        user = RAG_USER_NO_HITS.format(question=user_message.strip())
     return system, user
 
 
@@ -177,8 +176,7 @@ class IndexRequest(BaseModel):
     filename: str
 
 
-@app.post("/api/rag/index")
-async def rag_index(req_data: IndexRequest):
+def _ensure_rag_ready() -> None:
     if not (os.getenv("JINA_API_KEY") or "").strip():
         raise HTTPException(status_code=400, detail="请配置 JINA_API_KEY。")
     if not PINECONE_KEY or not PINECONE_INDEX:
@@ -186,21 +184,52 @@ async def rag_index(req_data: IndexRequest):
             status_code=400,
             detail="请配置 PINECONE_API_KEY 与 PINECONE_INDEX。",
         )
+
+
+async def _index_text_response(text: str, filename: str) -> Dict[str, Any]:
+    count = await asyncio.to_thread(index_text_to_pinecone, text, filename)
+    return {
+        "success": True,
+        "count": count,
+        "filename": filename,
+        "textLength": len(text),
+        "pinecone_index": PINECONE_INDEX,
+        "pipeline": "jina→pinecone",
+        "chunking": get_chunk_strategy(),
+    }
+
+
+@app.post("/api/rag/index")
+async def rag_index(req_data: IndexRequest):
+    _ensure_rag_ready()
     if not req_data.text or not req_data.text.strip():
         raise HTTPException(status_code=400, detail="上传内容为空。")
 
     try:
-        count = await asyncio.to_thread(
-            index_text_to_pinecone, req_data.text, req_data.filename
-        )
-        return {
-            "success": True,
-            "count": count,
-            "filename": req_data.filename,
-            "pinecone_index": PINECONE_INDEX,
-            "pipeline": "jina→pinecone",
-            "chunking": get_chunk_strategy(),
-        }
+        return await _index_text_response(req_data.text, req_data.filename)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/rag/index/upload")
+async def rag_index_upload(file: UploadFile = File(...)):
+    """multipart 上传：支持 .txt/.md/.sql/.pdf 等，PDF 在后端解析为文本后建库。"""
+    _ensure_rag_ready()
+
+    filename = (file.filename or "upload").strip()
+    if not filename:
+        raise HTTPException(status_code=400, detail="文件名为空。")
+
+    try:
+        raw = await file.read()
+        text = extract_document_text(filename, raw)
+        resp = await _index_text_response(text, filename)
+        resp["sourceType"] = "pdf" if filename.lower().endswith(".pdf") else "text"
+        return resp
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -219,7 +248,7 @@ async def rag_clear():
 class ChatRequest(BaseModel):
     message: str
     history: List[Dict[str, Any]]
-    systemInstruction: str
+    systemInstruction: Optional[str] = None
     stream: bool = False
     useRAG: bool = False
     dashscopeKey: Optional[str] = None
@@ -234,7 +263,7 @@ async def chat(req_data: ChatRequest):
             detail="请配置 DASHSCOPE_API_KEY 或在设置中填写通义千问 Key。",
         )
 
-    system_instruction = req_data.systemInstruction
+    system_instruction = resolve_system_instruction(req_data.systemInstruction)
     user_message = req_data.message
 
     if req_data.useRAG:

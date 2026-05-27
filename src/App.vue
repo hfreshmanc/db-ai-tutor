@@ -93,11 +93,9 @@ const handleSend = async () => {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
+        body: JSON.stringify({
         message: userMsg,
         history,
-        systemInstruction:
-          '你是一位专业的数据库助教，擅长数据库原理、SQL 和性能优化。',
         useRAG: useRAG.value,
         dashscopeKey: dashscopeKey.value,
         stream: false,
@@ -154,18 +152,16 @@ const handleFileUpload = async (event: Event) => {
   isIndexing.value = true;
   
   try {
-    const text = await file.text();
-    const resp = await fetch('/api/rag/index', {
+    const formData = new FormData();
+    formData.append('file', file);
+
+    const resp = await fetch('/api/rag/index/upload', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        text,
-        filename: file.name,
-      }),
+      body: formData,
     });
     
     if (!resp.ok) {
-      const errText = await apiErrorMessage(resp, 'api/rag/index');
+      const errText = await apiErrorMessage(resp, 'api/rag/index/upload');
       console.error(errText);
       alert(errText);
       return;
@@ -174,13 +170,17 @@ const handleFileUpload = async (event: Event) => {
     const data = await resp.json();
     kbFiles.value.push({ name: file.name, size: file.size });
     useRAG.value = true;
-    alert(`已写入 Pinecone：${data.count ?? 0} 条向量（索引 ${data.pinecone_index ?? ''}）`);
+    const typeHint = data.sourceType === 'pdf' ? '（PDF 已解析为文本）' : '';
+    alert(
+      `已写入 Pinecone：${data.count ?? 0} 条向量${typeHint}（索引 ${data.pinecone_index ?? ''}）`
+    );
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
-    console.error('[api/rag/index]', error);
+    console.error('[api/rag/index/upload]', error);
     alert(`文件处理失败：${msg}`);
   } finally {
     isIndexing.value = false;
+    target.value = '';
   }
 };
 
@@ -229,7 +229,7 @@ const handleClearKB = async () => {
             </div>
 
             <label class="flex items-center justify-center space-x-2 p-3 bg-white border border-indigo-200 text-indigo-600 rounded-lg cursor-pointer hover:bg-indigo-50 transition-colors mt-4">
-              <input type="file" @change="handleFileUpload" class="hidden" accept=".txt,.md,.sql" />
+              <input type="file" @change="handleFileUpload" class="hidden" accept=".txt,.md,.sql,.pdf" />
               <Loader2 v-if="isIndexing" class="w-4 h-4 animate-spin" />
               <FileText v-else class="w-4 h-4" />
               <span class="text-sm font-semibold">上传学习资料</span>
