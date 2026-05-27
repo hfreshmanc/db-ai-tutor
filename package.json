@@ -1,0 +1,51 @@
+{
+  "name": "db-ai-tutor",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "concurrently -n api,web -c magenta,cyan \"npm run dev:backend\" \"npm run dev:frontend\"",
+    "dev:frontend": "vite",
+    "dev:backend": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/kill-port.ps1 -Port 3001 && python -m uvicorn main:app --host 0.0.0.0 --port 3001 --reload --log-level debug",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "python -m uvicorn main:app --host 0.0.0.0 --port 3001",
+    "lint": "vue-tsc --noEmit"
+  },
+  "dependencies": {
+    "@google/genai": "^1.29.0",
+    "@pinecone-database/pinecone": "^7.2.0",
+    "@tailwindcss/vite": "^4.1.14",
+    "@vitejs/plugin-vue": "^6.0.6",
+    "clsx": "^2.1.1",
+    "dompurify": "^3.4.6",
+    "dotenv": "^17.2.3",
+    "katex": "^0.16.38",
+    "lucide-vue-next": "^1.0.0",
+    "mammoth": "^1.12.0",
+    "markdown-it": "^14.2.0",
+    "motion": "^12.23.24",
+    "multer": "^2.1.1",
+    "natural": "^8.1.1",
+    "pdf-parse": "^2.4.5",
+    "react-markdown": "^10.1.0",
+    "rehype-katex": "^7.0.1",
+    "remark-gfm": "^4.0.1",
+    "remark-math": "^6.0.0",
+    "tailwind-merge": "^3.5.0",
+    "vue": "^3.5.34",
+    "vue-tsc": "^3.2.9"
+  },
+  "devDependencies": {
+    "@types/dompurify": "^3.0.5",
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^22.14.0",
+    "autoprefixer": "^10.4.21",
+    "concurrently": "^9.2.1",
+    "tailwindcss": "^4.1.14",
+    "tsx": "^4.21.0",
+    "typescript": "~5.8.2",
+    "vite": "^6.2.0",
+    "wait-on": "^9.0.4"
+  }
+}

@@ -1,0 +1,125 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+}
+
+@layer base {
+  html, body {
+    @apply h-full overflow-hidden overscroll-none;
+  }
+  body {
+    @apply antialiased;
+  }
+}
+
+/* Markdown Styles */
+.prose {
+  @apply text-[#374151] leading-relaxed;
+}
+
+.prose h1, .prose h2, .prose h3 {
+  @apply font-bold text-[#111827] mt-6 mb-4;
+}
+
+.prose h1 { @apply text-2xl; }
+.prose h2 { @apply text-xl; }
+.prose h3 { @apply text-lg; }
+
+.prose p {
+  @apply mb-4;
+}
+
+.prose ul, .prose ol {
+  @apply pl-6 mb-4 space-y-2;
+}
+
+.prose ul {
+  @apply list-disc;
+}
+
+.prose ol {
+  @apply list-decimal;
+}
+
+.prose code {
+  @apply font-mono text-sm px-1.5 py-0.5 rounded bg-slate-100 text-indigo-700 font-medium;
+}
+
+.prose pre {
+  @apply bg-[#1F2937] text-white p-4 rounded-xl overflow-x-auto my-6 border border-[#374151];
+}
+
+.prose pre code {
+  @apply bg-transparent text-inherit p-0 font-normal;
+}
+
+.prose blockquote {
+  @apply border-l-4 border-indigo-400 pl-4 italic text-slate-600 my-4;
+}
+
+/* 聊天气泡内 Markdown：收紧首尾间距 */
+.chat-prose > :first-child {
+  margin-top: 0;
+}
+.chat-prose > :last-child {
+  margin-bottom: 0;
+}
+.chat-prose h1,
+.chat-prose h2,
+.chat-prose h3 {
+  @apply mt-4 mb-2;
+}
+.chat-prose h1:first-child,
+.chat-prose h2:first-child,
+.chat-prose h3:first-child {
+  margin-top: 0;
+}
+.chat-prose p {
+  @apply mb-2;
+}
+.chat-prose ul,
+.chat-prose ol {
+  @apply mb-2;
+}
+.chat-prose pre {
+  @apply my-3;
+}
+.chat-prose strong {
+  @apply font-semibold text-slate-900;
+}
+
+.prose table {
+  @apply w-full border-collapse my-6 overflow-hidden rounded-xl border border-[#E5E7EB];
+  display: table;
+}
+
+.prose thead {
+  @apply bg-[#F9FAFB];
+}
+
+.prose th, .prose td {
+  @apply border border-[#E5E7EB] px-4 py-3 text-left text-sm;
+}
+
+.prose th {
+  @apply font-bold text-[#111827] whitespace-nowrap;
+}
+
+.prose tr:nth-child(even) {
+  @apply bg-[#FBFBFC];
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-[#E5E7EB] rounded-full hover:bg-[#D1D5DB];
+}

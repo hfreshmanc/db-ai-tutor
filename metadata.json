@@ -1,0 +1,5 @@
+{
+  "name": "DB-AI Tutor",
+  "description": "An intelligent AI teaching agent for Relational Database courses, helping students master SQL, data modeling, and database principles.",
+  "requestFramePermissions": []
+}

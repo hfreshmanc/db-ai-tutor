@@ -1,0 +1,8 @@
+fastapi
+uvicorn
+pinecone>=5.0.0
+httpx
+requests
+python-dotenv
+python-multipart
+numpy
